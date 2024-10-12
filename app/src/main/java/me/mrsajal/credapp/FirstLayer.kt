@@ -30,6 +30,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,12 +43,21 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material3.CardDefaults
+import androidx.compose.ui.draw.clip
 
 @Composable
 fun CreditSelectionScreen() {
     var cardStack by remember { mutableStateOf(listOf<Int>()) }
 
-    var currentCreditAmount by remember { mutableStateOf(0) }
+    var currentCreditAmount by remember { mutableIntStateOf(0) }
     var selectedEMI by remember { mutableStateOf<EmiItem?>(null) }
     var selectedBankAccount by remember { mutableStateOf("") }
 
@@ -107,15 +117,30 @@ fun CreditSelectionScreen() {
                         showEMIModal = false
                         showBankModal = false
                     }
+
                     0 -> {
                         // Reopen EMI modal
                         showEMIModal = true
                         showBankModal = false
                     }
+
                     1 -> {
                         // Reopen Bank Selection modal
                         showEMIModal = false
                         showBankModal = true
+                    }
+                }
+            }
+
+            // Handle back button press
+            BackHandler(enabled = showEMIModal || showBankModal) {
+                when {
+                    showBankModal -> {
+                        showModalForCard(0) // Go back to EMI modal
+                    }
+
+                    showEMIModal -> {
+                        showModalForCard(-1) // Go back to Credit Amount view
                     }
                 }
             }
@@ -143,6 +168,7 @@ fun CreditSelectionScreen() {
                                     }
                             )
                         }
+
                         1 -> {
                             CardView(
                                 title = selectedEMI?.title ?: "EMI",
@@ -154,6 +180,7 @@ fun CreditSelectionScreen() {
                                     }
                             )
                         }
+
                         2 -> {
                             CardView(
                                 title = "Bank Account",
@@ -205,7 +232,7 @@ fun CreditSelectionScreen() {
                     },
                     itemData = items[1],
                     modifier = Modifier
-                        .offset(y = offsetY+25.dp)
+                        .offset(y = offsetY + 25.dp)
                         .fillMaxWidth()
                         .height(modalHeight)
                         .background(Color.White)
@@ -223,9 +250,10 @@ fun CreditSelectionScreen() {
                         cardStack = cardStack.plus(2)
                         showBankModal = false
                     },
+                    selectedBank = selectedBankAccount,
                     itemData = items[2],
                     modifier = Modifier
-                        .offset(y = offsetY+25.dp)
+                        .offset(y = offsetY + 25.dp)
                         .fillMaxWidth()
                         .height(modalHeight)
                         .background(Color.White)
@@ -233,7 +261,6 @@ fun CreditSelectionScreen() {
             }
         }
     } else {
-        // Show error or loading indicator if items are not enough
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
@@ -242,6 +269,7 @@ fun CreditSelectionScreen() {
         }
     }
 }
+
 @Composable
 fun CreditAmountView(
     creditAmount: Int,
@@ -302,53 +330,13 @@ fun CreditAmountView(
         }
     }
 }
-@Composable
-fun EMISelectionView(
-    onSelectEMI: (EmiItem) -> Unit,
-    itemData: Item,
-    modifier: Modifier = Modifier
-) {
-    val emiItems = itemData.open_state?.body?.items?.filterIsInstance<EmiItem>() ?: emptyList()
 
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .fillMaxHeight()
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState())
-    ) {
-        Text(
-            text = itemData.open_state?.body?.title ?: "How do you wish to repay?",
-            style = MaterialTheme.typography.h6,
-            color = Color.Black
-        )
-        Text(
-            text = itemData.open_state?.body?.subtitle ?: "Choose one of the recommended plans",
-            color = Color.Gray
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        emiItems.forEach { emiItem ->
-            Button(
-                onClick = {
-                    onSelectEMI(emiItem)
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("${emiItem.emi} for ${emiItem.duration}")
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-        }
-    }
-}
-
-// Similarly update BankSelectionView
 
 @Composable
 fun BankSelectionView(
     onBankSelected: (String) -> Unit,
     itemData: Item,
+    selectedBank: String?,
     modifier: Modifier = Modifier
 ) {
     val bankItems = itemData.open_state?.body?.items ?: emptyList()
@@ -360,11 +348,14 @@ fun BankSelectionView(
             .padding(16.dp)
             .verticalScroll(rememberScrollState())
     ) {
+        // Title
         Text(
             text = itemData.open_state?.body?.title ?: "Where should we send the money?",
             style = MaterialTheme.typography.h6,
             color = Color.Black
         )
+
+        // Subtitle
         Text(
             text = itemData.open_state?.body?.subtitle ?: "Select your bank account",
             color = Color.Gray
@@ -372,30 +363,101 @@ fun BankSelectionView(
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        // Display bank items as selectable cards
         bankItems.forEach { bankItem ->
             val bankName = bankItem.title ?: ""
-            Button(
-                onClick = {
-                    onBankSelected(bankName)
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(bankName)
-            }
-            Spacer(modifier = Modifier.height(8.dp))
+            val bankAccountNumber = bankItem.subtitle?.toString() ?: ""
+
+            BankCard(
+                bankName = bankName,
+                accountNumber = bankAccountNumber,
+                isSelected = bankName == selectedBank,
+                onSelect = { onBankSelected(bankName) }
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        // CTA Button (Tap for KYC)
         Button(
-            onClick = { /* Do nothing for the last modal */ },
-            modifier = Modifier.fillMaxWidth(),
+            onClick = { /* Handle KYC logic here */ },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6200EA))
         ) {
-            Text("Done", color = Color.White)
+            Text("Tap for 1-click KYC", color = Color.White)
         }
     }
 }
+
+@Composable
+fun BankCard(
+    bankName: String,
+    accountNumber: String,
+    isSelected: Boolean,
+    onSelect: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onSelect() }, // Keep clickable behavior on the card
+        colors = CardDefaults.cardColors(Color.Transparent),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp), // Only apply padding to the content inside the card
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .background(Color.LightGray, shape = RoundedCornerShape(12.dp))
+                ) {
+                }
+
+                Spacer(modifier = Modifier.width(16.dp))
+
+                Column {
+                    Text(
+                        text = bankName,
+                        style = MaterialTheme.typography.body1,
+                        color = Color.Black
+                    )
+                    Text(
+                        text = accountNumber,
+                        style = MaterialTheme.typography.subtitle2,
+                        color = Color.Gray
+                    )
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(12.dp)) // Rounded circle shape
+                    .border(2.dp, Color.Gray, RoundedCornerShape(120.dp)) // Border for circle
+                    .background(Color.Transparent), // Background of circle
+                contentAlignment = Alignment.Center
+            ) {
+                if (isSelected) {
+                    Icon(
+                        imageVector = Icons.Outlined.Check,
+                        contentDescription = "Selected",
+                        tint = Color(0xFF6200EA),
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
 
 @Composable
 fun CardView(
